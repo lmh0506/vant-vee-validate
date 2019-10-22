@@ -1,7 +1,7 @@
 <template>
   <div class="my-upload-wrapper">
     <div class="my-img-wrapper" v-for="(file, index) in fileList" :key="index">
-      <img class="my-img" :style="imgStyle" :src="file.url" alt="">
+      <img class="my-img" :class="imgClass" :src="file.url" alt="">
       <div class="upload-mask" v-if="file.success">
         <van-icon class="success" name="checked" />
       </div>
@@ -39,6 +39,7 @@
 
 <script>
 import axios from 'axios'
+import { FILE_UPLOAD } from '@/configs/config'
 export default {
   name: 'MyUpload',
   props: {
@@ -49,14 +50,9 @@ export default {
         return []
       }
     },
-    imgStyle: { // 上传后的图片样式
-      type: Object,
-      default () {
-        return {
-          width: '80px',
-          height: '80px'
-        }
-      }
+    imgClass: { // 上传后的图片样式
+      type: String,
+      default: ''
     },
     accept: { // 接受的文件类型
       type: String,
@@ -89,17 +85,15 @@ export default {
       type: String,
       default: 'file'
     },
-    headers: { // 自定义请求头
-      type: Object,
-      default () {
-        return {}
-      }
-    },
     data: { // 上传需要附加数据
       type: Object,
       default () {
         return {}
       }
+    },
+    timeout: {
+      type: Number,
+      default: 60000
     },
     // 上传组件Props结束
 
@@ -135,8 +129,7 @@ export default {
   },
   data () {
     return {
-      fileList: this.files.slice(),
-      currentRate: 0
+      fileList: this.files.slice()
     }
   },
   computed: {
@@ -171,11 +164,11 @@ export default {
       try {
         let res = await axios({
           method: 'post',
-          url: 'http://61.164.53.62:8103/v1/file/normalUpload',
+          url: FILE_UPLOAD,
           data,
+          timeout: this.timeout,
           headers: {
-            'Content-Type': 'multipart/form-data',
-            ...this.headers
+            'Content-Type': 'multipart/form-data'
           },
           cancelToken: source.token, // 这里声明的cancelToken其实相当于是一个标记
           onUploadProgress: progressEvent => {
@@ -190,7 +183,7 @@ export default {
 
         if (res.data.success) {
           let index = this.getFileIndex(id)
-          console.log('success')
+
           this.$set(this.fileList[index], 'success', true)
           this.$emit('uploadSuccess', res.data.data)
         } else {
@@ -198,8 +191,13 @@ export default {
         }
       } catch (e) {
         console.log(e)
+
         if (axios.isCancel(e)) {
           this.$toast('取消上传')
+        } else if (e.code === 'ECONNABORTED' && e.message.indexOf('timeout') !== -1) {
+          this.$toast('请求超时')
+          let index = this.getFileIndex(id)
+          this.fileList.splice(index, 1)
         } else {
           let index = this.getFileIndex(id)
           this.fileList.splice(index, 1)
@@ -234,6 +232,8 @@ export default {
   .my-img{
     display: block;
     border-radius: 5px;
+    width: 80px;
+    height: 80px;
   }
   .my-img-wrapper{
     position: relative;
